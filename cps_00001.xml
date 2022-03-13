@@ -12,12 +12,12 @@
         <AuthEnty affiliation="University of Minnesota">IPUMS</AuthEnty>
       </rspStmt>
       <prodStmt>
-        <producer abbr="IPUMS" affiliation="University of Minnesota" role="Documentation">IPUMS</producer>
+        <producer abbr="IPUMS" affiliation="Seattle University" role="Documentation">IPUMS</producer>
         <prodDate date="2022-03-09">March 9, 2022</prodDate>
-        <prodPlac>IPUMS, 50 Willey Hall, 225 - 19th Avenue South, Minneapolis, MN 55455</prodPlac>
+        <prodPlac>IPUMS, 901 12th Ave, Seattle, WA 98122</prodPlac>
       </prodStmt>
       <distStmt>
-        <contact URI="https://ipums.org" affiliation="University of Minnesota">IPUMS</contact>
+        <contact URI="https://ipums.org" affiliation="Seattle University">IPUMS</contact>
       </distStmt>
     </citation>
   </docDscr>
