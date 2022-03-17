@@ -1,0 +1,202 @@
+---
+title: "Final Group Project"
+author: "Sella, Mario, Nuoya, Xinzhu"
+date: "3/08/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ipumsr)
+library(dplyr)
+library(vtable)
+library(ggplot2)
+library(huxtable)
+library(jtools)
+```
+
+##Introduction
+
+Employment is one of the most important topics in macroeconomics. Moreover, employment and wages are some of the factors that affects to people's standard of living or quality of life. Governmental authorities and the central banks (FED) monitor all the possible variables to maximize the social walfare. Since US economy has been effected by the on-going COVID-19 situation, the FED has implemented quantitative easing policies in order to maintain full employment regardless of the inflation. Moreover, the retail sector has been disrupted by the pandemic lock-down for a few months. 
+
+In this project, we are exploring real world survey-based employment data focusing on retail sector. The data source is from the Current Population Survey - employment data. Our main research question is whether retail employment is affected by the pandemic and, if so, to what extent compared to non-retail sectors. Our main research question is whether COVID-19 pandemic has effect on the retail sector employment or not. If it is so, we are to analyze how much is the effect compared to the non-retail sectors.
+
+```{r}
+ddi <- read_ipums_ddi("cps_00001.xml")
+data <- read_ipums_micro(ddi)
+ind_names <- read.csv("indnames.csv")
+```
+
+
+##Background
+Wealth Health Organization (WHO) declared that SARS-CoV-2 caused the pandemic on late March 2020 (Yale 2020). So, we are observing data for the unemployment during the COVID-19 time which is from late March 2020. The CPS data cover the period from March 2009 (2009M3) to January 2022 (2022M1), consisting 5,370,644 observations. First, we clean the data set to get rid of the bias. Our cleaning steps:
+
+
+##First Step
+
+First, getting rid of all data that are coded as 9999.99 (or the missing data) in Weekly Earnings (EARNWEEK variable) in order for we to determine people who have earnings. Then, we generate 'subdata' that contains the relevant variables. We assume that in general, employment and unemployment include  information, such as: age, sex, race, education, etc.
+
+```{r}
+data <- data[!(data$EARNWEEK==9999.99),]
+
+subdata <- data.frame(cbind(data$YEAR, data$MONTH, data$AGE, data$SEX, data$RACE, data$EMPSTAT, data$IND, data$EDUC, data$EARNWEEK))
+
+colnames(subdata) <- c("YEAR","MONTH", "AGE", "SEX", "RACE", "EMPSTAT", "IND", "EDUC", "EARNWEEK")
+```
+
+##Second Step
+
+Next, we transform the data using dummy variables so it will be less complicated for making the estimation model. 
+Education dummy - 1, if the participant has bachelor or higher degree. Otherwise, it will be 0.
+Gender dummy - 1, if the participant is man. Otherwise, it will be 0.
+COVID19 Pandemic dummy - 1, during the lockdown and policies carried out continously between April 2020 to July 2021. We assume that pandemic is starting April 2020 since it was started late March.
+
+Then, we left_join the Industry names to the subdata. So, we are now able to determine which Retail that the participant work for. 
+
+```{r}
+subdata <- left_join(subdata, ind_names, by = c("IND" = "ind"))
+
+subdata$EMPSTAT[subdata$EMPSTAT %in% 10|12] <- 1
+
+subdata$EDUC[subdata$EDUC > 110] <- 1
+
+subdata$EDUC[subdata$EDUC == 73|subdata$EDUC == 91|subdata$EDUC == 81|subdata$EDUC == 50|subdata$EDUC == 92|subdata$EDUC == 60|subdata$EDUC == 71|subdata$EDUC == 30|subdata$EDUC == 40|subdata$EDUC == 20|subdata$EDUC == 10|subdata$EDUC == 2] <- 0
+
+subdata$SEX[subdata$SEX == 2] <- 0
+
+subdata$Dummy = subdata$YEAR
+subdata$Dummy[subdata$Dummy < 2020] <- 0
+subdata$Dummy[subdata$Dummy == 2020|subdata$Dummy == 2021] <-1
+subdata$Dummy[subdata$Dummy == 2022] <- 0
+subdata$Dummy[subdata$YEAR == 2020 & subdata$MONTH == 1|subdata$YEAR == 2020 & subdata$MONTH == 2|subdata$YEAR == 2020 & subdata$MONTH == 3|subdata$YEAR == 2021 & subdata$MONTH == 7|subdata$YEAR == 2021 & subdata$MONTH == 8|subdata$YEAR == 2021 & subdata$MONTH == 9|subdata$YEAR == 2021 & subdata$MONTH == 10|subdata$YEAR == 2021 & subdata$MONTH == 11|subdata$YEAR == 2021 & subdata$MONTH == 12] <- 0
+```
+
+
+##Third Step
+
+Then, group and summarize variables through time as we summarize the employment by year and month variable. For example Year = 2020, month = 3 indicates the total employed people in the survey. However, it was hard to generalize the other variables such as age, education, sex etc. As a result, we computed average and ratios for respective variables. Even though averaging the age cannot fully represent the relationship, we believe that it is a widely used in statistical measurements.
+
+Here we also have a problem with time range. From 2009 to 2019, the data was collected March annually where we assume that they obtained data monthly since November 2019. Thus the time dimension is unbalanced which shortens our summarized sample size to 38 observations.
+
+
+```{r}
+EMP <- subdata %>%
+  group_by(YEAR, MONTH) %>% summarize(RetailEmployment = sum(ï..indname == 'Retail Trade'))
+
+Age <- subdata %>%
+  group_by(YEAR, MONTH) %>%
+  summarize(Age = mean(AGE))
+
+SEX <- subdata %>%
+  group_by(YEAR, MONTH) %>%
+  summarize(Sex = mean(SEX)*100)
+
+EDUC <- subdata %>%
+  group_by(YEAR, MONTH) %>%
+  summarize(Educ = mean(EDUC)*100)
+
+Wage <- subdata %>%
+  group_by(YEAR, MONTH) %>%
+  summarize(Wage = mean(EARNWEEK))
+
+EMP$Dummy = EMP$YEAR
+EMP$Dummy[EMP$Dummy < 2020|EMP$Dummy == 2022] <- 0
+EMP$Dummy[EMP$Dummy == 2020|EMP$Dummy == 2021] <- 1
+EMP$Dummy[EMP$YEAR == 2020 & EMP$MONTH == 1|EMP$YEAR == 2020 & EMP$MONTH == 2|EMP$YEAR == 2020 & EMP$MONTH == 3|EMP$YEAR == 2021 & EMP$MONTH == 7|EMP$YEAR == 2021 & EMP$MONTH == 8|EMP$YEAR == 2021 & EMP$MONTH == 9|EMP$YEAR == 2021 & EMP$MONTH == 10|EMP$YEAR == 2021 & EMP$MONTH == 11|EMP$YEAR == 2021 & EMP$MONTH == 12] <- 0
+
+EMP$Age <- Age$Age
+EMP$EDUC <- EDUC$Educ
+EMP$SEX <- SEX$Sex
+EMP$Wage <- Wage$Wage
+
+sumtable(EMP, digits = 1,labels = c("Year", "Month", "Employment - RS", "Pandemic dummy", "Age", "Education", "Gender", "Earnings"), title = "Descriptive statistics")
+
+```
+
+Based on our sample, on average, there are 1,375 people worked in the retail sector and they were 42.5 years old (or we can say 43 years old), 39.1% were highly educated, 50.8% were men (interestingly almost half, perhaps survey sample structured this way) and their earning was 1,021.6 units on average.
+
+##Fourth step
+
+After we get the mean for all variables, we are going to describe the correlation between those variables with the main variable (Retail Employment). 
+
+```{r}
+No_retail <- subdata %>%
+  group_by(YEAR, MONTH) %>%
+  summarize(RetailEmployment = sum(ï..indname != "Retail Industry"))
+
+EMP$No_retail <- No_retail$RetailEmployment
+
+ggplot(EMP)  + 
+  geom_bar(aes(x=YEAR, y=RetailEmployment),stat="identity", fill="cyan",colour="#006000")+
+  geom_line(aes(x=YEAR, y=No_retail),stat="identity",color="red")+
+  labs(title= "Employment",
+       x="Year",y="Number of people")
+
+pairs(~RetailEmployment + Age + Dummy + Wage, data = EMP, main = "Scatterplot Matrix")
+```
+
+GGplot shows that there was a sudden shock in 2020 which interestingly seems like a positive shock to the retail sector. From the scatter plot, we can see that there is negative correlation between age and retail sector employment whereas positive correlation between age and earnings.
+
+#Fifth Step
+
+Lastly, we estimated different types of models that explain the relationship between the pandemic and retail sector.
+a. Model 1 - To obtain continuous time series data, we generated sub samples from 2019M11 to 2022M1. An estimated logarithm version of employment and earnings including the dummy. In this case, it would be easier to explain the relationship between earnings and employment by percentage.
+ 
+```{r}
+
+sub_sub_data <- EMP[12:38,]
+dummy <- data.frame(sub_sub_data$Dummy)
+dummy_new <- dummy[2:27,]
+data22<- cbind(data.frame(diff(sub_sub_data$RetailEmployment)), data.frame(diff(sub_sub_data$Wage)), dummy_new)
+colnames(data22) <- c("E","W", "D")
+model <- lm(E~D+W, data = data22)
+
+model1<-lm(log(RetailEmployment)~log(Wage) + Dummy, data = sub_sub_data)
+
+```
+ 
+b. Model 2 - Exactly same estimation in the instruction, but with time and the pandemic effect dummy variable model.
+ 
+
+```{r}
+model2 <- lm(log(RetailEmployment) ~ YEAR + Dummy + YEAR*Dummy, data = EMP)
+```
+c. Model 3 - In order to compare the pandemic effect between retail and non-retail sector, we estimated the non-retail sector model with year and pandemic dummy variables. Alternatively we can generate retail dummy variables and estimate panel data models. But here, we estimated two different models and compared the results
+ 
+```{r}
+
+model3 <- lm(log(No_retail) ~ YEAR + Dummy + YEAR*Dummy, data = EMP)
+``` 
+d. Model 4 - Model 2 with gender dummy. To determine characteristics of the retail sector employees, we include wage, gender, education and age. However the most important and statistically significant one was gender variable.
+
+
+```{r}
+
+model4 <- lm(log(RetailEmployment) ~ YEAR + Dummy + YEAR*Dummy + SEX, data = EMP)
+```
+
+We described the comparison table in the below and the confidence level is 90%. The continuous sample estimation model shows (Model1) 1% increase in earnings decreases retail sector employment by 3.8%. 
+
+Model 2 shows that due to the COVID-19 pandemic, the retail sector employment decreased by 486% on average and 1 year later during the pandemic era, the employment increased by 0.24% on average. 
+
+Model 3 shows that the pandemic negatively affected the sector but the sector is recovering time after time. Compared to the retail sector, other sectors less negatively affected by the pandemic and recovery are slower than the retail sector in terms of employment
+
+Model 4 shows that men in the retail sector are 0.16% less than the women on average
+
+```{r}
+
+export_summs(model1, model2, model3, model4, model.names = c("Model 1","Model 2","Model 3", "Model 4"))
+```
+
+
+Conclusion and further comments on the estimation results:
+1. Employment data is important and informative.
+2. We encountered many challenges to analyze real life and attempted to solve.
+3. Retail sector was negatively affected by the pandemic and is trying to recover.
+4. Other sectors also negatively affected by the event but less severely than the retail sector.
+5. Wage and gender variables can explain the variation of employment.
+6. For further analysis, we should include employment as well as unemployment data. Then we can estimate binary-panel models that can evaluate the probability of employment. That would be interesting.
+
+References:
+Yale Medicine. Our Pandemic Year—A COVID-19 Timeline, March 2020
+IPUMS release – Current Population Survey 2022.
